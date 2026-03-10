@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEX Terminal</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600;700&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg0:#060810;--bg1:#0a0f1c;--bg2:#0f1628;--bg3:#172040;
+  --line:#1c2a45;--line2:#253660;
+  --cyan:#00e5ff;--green:#00e676;--red:#ff3d57;--amber:#ffab00;--purple:#b388ff;
+  --white:#dde8f0;--muted:#4a6080;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+html,body{height:100%;background:var(--bg0);color:var(--white);font-family:var(--mono);font-size:13px;overflow:hidden;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.010) 2px,rgba(0,229,255,0.010) 4px);}
+
+/* ── Layout ── */
+#app{display:grid;grid-template-rows:44px auto 1fr;grid-template-columns:200px 1fr 260px;height:100vh;position:relative;z-index:1;}
+#topbar{grid-column:1/-1;display:flex;align-items:center;border-bottom:1px solid var(--line);}
+#metrics-bar{grid-column:1/-1;display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:var(--bg1);overflow-x:auto;}
+#sidebar-left{border-right:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;}
+#main{overflow:hidden;display:flex;flex-direction:column;position:relative;}
+#sidebar-right{border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:2px;}
+
+/* ── Topbar ── */
+.tb-brand{padding:0 14px;border-right:1px solid var(--line);height:100%;display:flex;align-items:center;gap:10px;min-width:200px;}
+.tb-logo{width:26px;height:26px;background:var(--cyan);color:#000;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;}
+.tb-title{font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan);}
+.tb-sub{font-size:8px;color:var(--muted);letter-spacing:1px;margin-top:1px;}
+.tb-ticker-row{display:flex;align-items:center;flex:1;height:100%;overflow-x:auto;}
+.ticker-btn{padding:0 13px;height:100%;border:none;background:none;color:var(--muted);font-family:var(--mono);font-size:11px;font-weight:600;cursor:pointer;border-right:1px solid var(--line);white-space:nowrap;transition:color .15s,background .15s;letter-spacing:.5px;}
+.ticker-btn:hover{color:var(--white);background:var(--bg1);}
+.ticker-btn.active{color:var(--cyan);background:var(--bg2);}
+.tk-regime{display:block;font-size:7px;margin-top:1px;font-weight:400;}
+.tb-right{display:flex;align-items:center;gap:10px;padding:0 12px;border-left:1px solid var(--line);margin-left:auto;flex-shrink:0;}
+#clock{font-size:10px;color:var(--muted);letter-spacing:1px;}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+.sdot.live{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;}
+.sdot.error{background:var(--red);}
+.sdot.loading{background:var(--amber);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Metrics bar ── */
+.met{padding:8px 16px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;min-width:130px;cursor:default;}
+.met-label{font-size:8px;letter-spacing:1.5px;color:var(--muted);margin-bottom:4px;}
+.met-val{font-size:14px;font-weight:700;line-height:1;letter-spacing:.5px;}
+.met-sub{font-size:8px;color:var(--muted);margin-top:3px;}
+.met-divider{width:1px;background:var(--line);align-self:stretch;margin:6px 0;}
+.regime-bar-wrap{display:flex;align-items:center;gap:8px;padding:8px 14px;border-right:1px solid var(--line);min-width:200px;}
+.regime-track{width:120px;height:5px;background:var(--line);border-radius:3px;overflow:hidden;position:relative;}
+.regime-fill{height:100%;border-radius:3px;transition:width .5s,background .5s;}
+
+/* ── View tabs ── */
+#view-tabs{display:flex;align-items:center;gap:0;padding:0 8px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.vtab{padding:7px 14px;font-size:10px;font-weight:600;letter-spacing:1px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.vtab:hover{color:var(--white);}
+.vtab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+.ctrl-right{margin-left:auto;display:flex;align-items:center;gap:6px;padding-right:4px;}
+select.ctrl{background:var(--bg1);border:1px solid var(--line);color:var(--white);padding:3px 8px;border-radius:3px;font-family:var(--mono);font-size:9px;height:24px;outline:none;cursor:pointer;}
+.btn{background:var(--cyan);color:#000;border:none;padding:0 10px;height:24px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:opacity .15s;}
+.btn:hover{opacity:.85;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-g{background:none;border:1px solid var(--line2);color:var(--muted);padding:0 8px;height:24px;border-radius:3px;font-family:var(--mono);font-size:9px;cursor:pointer;transition:all .15s;}
+.btn-g:hover{border-color:var(--cyan);color:var(--cyan);}
+
+/* ── Views ── */
+.view{display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;}
+.view.active{display:flex;flex-direction:column;}
+
+/* ── Profile view ── */
+#profile-chart{flex:1;min-height:0;}
+
+/* ── Chart+GEX view ── */
+#chart-gex{flex:1;min-height:0;display:flex;flex-direction:column;}
+#combined-chart{flex:1;min-height:0;}
+
+/* ── Heatmap view ── */
+#heatmap-view{flex:1;min-height:0;display:flex;flex-direction:column;}
+#heatmap-chart{flex:1;min-height:0;}
+
+/* ── Matrix view ── */
+#matrix-view{flex:1;overflow:auto;}
+#matrix-table{border-collapse:collapse;white-space:nowrap;font-size:10px;}
+#matrix-table th{padding:5px 10px;border:1px solid var(--line);color:var(--muted);font-weight:600;letter-spacing:.5px;background:var(--bg1);position:sticky;top:0;z-index:2;font-size:9px;}
+#matrix-table th.strike-col{left:0;z-index:3;min-width:72px;}
+#matrix-table td{padding:4px 8px;border:1px solid var(--line);text-align:right;font-size:10px;transition:background .2s;}
+#matrix-table td.strike-cell{color:var(--muted);font-size:9px;text-align:center;background:var(--bg1);position:sticky;left:0;z-index:1;font-weight:600;}
+.total-row td{border-top:2px solid var(--line2);color:var(--amber);}
+
+/* ── Left sidebar watchlist ── */
+.panel-hdr{padding:8px 12px;border-bottom:1px solid var(--line);font-size:8px;letter-spacing:2px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wl-item{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s;}
+.wl-item:hover{background:var(--bg2);}
+.wl-item.active{background:var(--bg2);border-left:2px solid var(--cyan);}
+.wl-ticker{font-size:12px;font-weight:700;letter-spacing:1px;}
+.wl-spot{font-size:11px;margin-top:2px;}
+.wl-meta{font-size:8px;margin-top:3px;display:flex;align-items:center;gap:5px;}
+.rbadge{font-size:7px;font-weight:700;letter-spacing:.5px;padding:2px 4px;border-radius:2px;}
+.rpos{background:rgba(0,230,118,.15);color:var(--green);border:1px solid rgba(0,230,118,.3);}
+.rneg{background:rgba(255,61,87,.15);color:var(--red);border:1px solid rgba(255,61,87,.3);}
+.runk{background:rgba(74,96,128,.2);color:var(--muted);border:1px solid var(--line);}
+.wl-load{font-size:8px;color:var(--muted);border:1px solid var(--line2);background:none;padding:2px 5px;border-radius:2px;cursor:pointer;font-family:var(--mono);transition:all .15s;}
+.wl-load:hover{border-color:var(--cyan);color:var(--cyan);}
+
+/* ── Right sidebar alerts ── */
+#alert-feed{display:flex;flex-direction:column;flex:1;overflow-y:auto;}
+.al-del{background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:9px;margin-left:auto;padding:0 2px;line-height:1;flex-shrink:0;}
+.al-del:hover{color:var(--red);}
+.al-hdr{display:flex;align-items:center;gap:4px;}
+.al-ticker-active{color:var(--cyan)!important;font-weight:700;}
+.al-current{border-left-color:var(--cyan)!important;}
+.al-item{padding:9px 10px;border-bottom:1px solid var(--line);border-left:3px solid transparent;animation:alin .25s ease;}
+@keyframes alin{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:none}}
+.al-item.CRITICAL{border-left-color:var(--red);background:rgba(255,61,87,.04);}
+.al-item.WARNING{border-left-color:var(--amber);background:rgba(255,171,0,.04);}
+.al-item.INFO{border-left-color:var(--cyan);background:rgba(0,229,255,.03);}
+.al-hdr{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+.al-sev{font-size:7px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:2px;}
+.al-sev.CRITICAL{background:rgba(255,61,87,.2);color:var(--red);}
+.al-sev.WARNING{background:rgba(255,171,0,.2);color:var(--amber);}
+.al-sev.INFO{background:rgba(0,229,255,.15);color:var(--cyan);}
+.al-ticker{font-size:10px;font-weight:700;}
+.al-time{font-size:8px;color:var(--muted);margin-left:auto;}
+.al-msg{font-size:9px;line-height:1.35;}
+.al-spot{font-size:8px;color:var(--muted);margin-top:2px;}
+.no-al{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:10px;text-align:center;padding:16px;}
+
+/* ── Empty / spinner ── */
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:11px;gap:8px;}
+.sp{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Toasts ── */
+#toasts{position:fixed;bottom:14px;right:270px;z-index:999;display:flex;flex-direction:column;gap:5px;}
+.toast{background:var(--bg2);border:1px solid var(--line2);border-radius:3px;padding:8px 12px;font-size:10px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.5);animation:tin .2s ease;}
+@keyframes tin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.toast.ok{border-color:rgba(0,230,118,.4);color:var(--green);}
+.toast.err{border-color:rgba(255,61,87,.4);color:var(--red);}
+.toast.info{border-color:rgba(0,229,255,.3);color:var(--cyan);}
+.toast.warn{border-color:rgba(255,171,0,.4);color:var(--amber);}
+
+.chart-mini-label{padding:5px 12px;font-size:8px;letter-spacing:1.5px;color:var(--muted);border-bottom:1px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+
+/* ── Trade idea cards ── */
+.ideas-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-shrink:0;}
+.ideas-meta{font-size:9px;color:var(--muted);}
+.idea-card{background:var(--bg1);border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+.idea-card.bullish{border-left:3px solid var(--green);}
+.idea-card.bearish{border-left:3px solid var(--red);}
+.idea-card.neutral{border-left:3px solid var(--amber);}
+.idea-hdr{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;}
+.idea-strategy{font-size:12px;font-weight:700;letter-spacing:.5px;}
+.idea-dir{font-size:8px;font-weight:700;letter-spacing:1px;padding:2px 6px;border-radius:2px;}
+.dir-bullish{background:rgba(0,230,118,.15);color:var(--green);border:1px solid rgba(0,230,118,.3);}
+.dir-bearish{background:rgba(255,61,87,.15);color:var(--red);border:1px solid rgba(255,61,87,.3);}
+.dir-neutral{background:rgba(255,171,0,.15);color:var(--amber);border:1px solid rgba(255,171,0,.3);}
+.idea-conf{font-size:8px;letter-spacing:.5px;color:var(--muted);}
+.idea-conf.high{color:var(--green);}
+.idea-conf.medium{color:var(--amber);}
+.idea-conf.low{color:var(--muted);}
+.idea-rr{font-size:10px;color:var(--cyan);margin-left:auto;font-weight:600;}
+.idea-body{padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.idea-section{font-size:9px;}
+.idea-section-label{color:var(--muted);letter-spacing:1px;margin-bottom:4px;font-size:8px;}
+.idea-section-val{color:var(--white);line-height:1.5;}
+.legs-table{width:100%;border-collapse:collapse;margin-top:4px;}
+.legs-table td{padding:3px 6px;font-size:9px;border:1px solid var(--line);}
+.legs-table .buy{color:var(--green);}
+.legs-table .sell{color:var(--red);}
+.tags-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.tag{font-size:7px;letter-spacing:.5px;padding:2px 5px;border-radius:2px;background:rgba(0,229,255,.08);color:var(--cyan);border:1px solid rgba(0,229,255,.2);}
+.idea-rationale{grid-column:1/-1;font-size:9px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px;line-height:1.5;}
+.gen-btn{background:linear-gradient(135deg,#00b4d8,#00e5ff);color:#000;border:none;padding:0 16px;height:28px;border-radius:3px;font-family:var(--mono);font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:opacity .15s;}
+.gen-btn:hover{opacity:.85;}
+.gen-btn:disabled{opacity:.5;cursor:not-allowed;}
+.disclaimer{font-size:8px;color:var(--muted);padding:8px 0;border-top:1px solid var(--line);line-height:1.5;}
+.idea-setup{grid-column:1/-1;font-size:10px;color:var(--white);font-style:italic;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:4px;line-height:1.4;}
+
+/* ── Bucket charts ── */
+.bucket-row{display:grid;grid-template-columns:repeat(3,1fr);flex:1;min-height:0;height:100%;}
+.bucket-panel{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.bucket-panel:last-child{border-right:none;}
+.bucket-hdr{padding:6px 10px;border-bottom:1px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+.bucket-name{font-size:9px;font-weight:700;letter-spacing:1.5px;}
+.bucket-net{font-size:11px;font-weight:700;}
+.bucket-desc{font-size:8px;color:var(--muted);margin-top:1px;}
+.bucket-chart{flex:1;min-height:0;overflow:hidden;}
+/* ── Research view ── */
+.rsch-alert{background:var(--bg1);border:1px solid var(--line);border-radius:3px;padding:8px 10px;font-size:9px;border-left:3px solid transparent;}
+.rsch-alert.CRITICAL{border-left-color:var(--red);}
+.rsch-alert.WARNING{border-left-color:var(--amber);}
+.rsch-alert.INFO{border-left-color:var(--cyan);}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="tb-brand">
+    <div class="tb-logo">Γ</div>
+    <div><div class="tb-title">GEX TERMINAL</div><div class="tb-sub">GAMMA EXPOSURE</div></div>
+  </div>
+  <div class="tb-ticker-row" id="ticker-tabs"></div>
+  <div class="tb-right">
+    <span id="clock"></span>
+    <div class="sdot" id="sdot"></div>
+  </div>
+</div>
+
+<!-- METRICS BAR -->
+<div id="metrics-bar">
+  <div class="met"><div class="met-label">SPOT</div><div class="met-val" id="m-spot" style="color:var(--cyan)">—</div><div id="spot-source" style="font-size:7px;opacity:.75;margin-top:1px"></div></div>
+  <div class="met"><div class="met-label">ZERO GAMMA</div><div class="met-val" id="m-zg">—</div><div class="met-sub" id="m-zg-dist">regime flip level</div></div>
+  <div class="met"><div class="met-label">GAMMA WALL</div><div class="met-val" id="m-gw" style="color:var(--amber)">—</div><div class="met-sub">max |GEX| magnet</div></div>
+  <div class="met"><div class="met-label">CALL WALL</div><div class="met-val" id="m-cw" style="color:var(--green)">—</div><div class="met-sub">overhead resistance</div></div>
+  <div class="met"><div class="met-label">PUT WALL</div><div class="met-val" id="m-pw" style="color:var(--red)">—</div><div class="met-sub">downside accelerator</div></div>
+  <div class="met"><div class="met-label">NET GEX</div><div class="met-val" id="m-net">—</div><div class="met-sub" id="m-skew">—</div></div>
+  <div class="met"><div class="met-label">CONTRACTS</div><div class="met-val" id="m-ctrs" style="color:var(--muted)">—</div><div class="met-sub" id="m-snaps">—</div></div>
+  <div class="regime-bar-wrap">
+    <div>
+      <div class="met-label" style="margin-bottom:4px">REGIME</div>
+      <div class="met-val" id="m-regime" style="font-size:11px">—</div>
+    </div>
+    <div>
+      <div class="regime-track"><div class="regime-fill" id="regime-fill" style="width:50%;background:var(--muted)"></div></div>
+      <div style="font-size:8px;color:var(--muted);margin-top:3px" id="m-strength">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- LEFT SIDEBAR -->
+<div id="sidebar-left">
+  <div class="panel-hdr"><span>WATCHLIST</span><span id="wl-ts"></span></div>
+  <div id="wl-items"></div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- View tabs + controls -->
+  <div id="view-tabs">
+    <div class="vtab active" onclick="switchView('profile')">PROFILE</div>
+    <div class="vtab" onclick="switchView('chart')">CHART + GEX</div>
+    <div class="vtab" onclick="switchView('heatmap')">HEATMAP</div>
+    <div class="vtab" onclick="switchView('matrix')">MATRIX</div>
+    <div class="vtab" onclick="switchView('ideas')">⚡ TRADE IDEAS</div>
+    <div class="vtab" onclick="switchView('buckets')">DTE BUCKETS</div>
+    <div class="vtab" onclick="switchView('research')">RESEARCH</div>
+    <div class="ctrl-right">
+      <select class="ctrl" id="win-sel" onchange="redraw()">
+        <option value="0.05">±5%</option>
+        <option value="0.10" selected>±10%</option>
+        <option value="0.15">±15%</option>
+        <option value="0.25">±25%</option>
+        <option value="1.00">All</option>
+      </select>
+      <select class="ctrl" id="hrs-sel" onchange="redraw()">
+        <option value="-1" selected>All</option>
+        <option value="6">6h</option>
+        <option value="24">1d</option>
+        <option value="120">5d</option>
+      </select>
+      <button class="btn" id="rfbtn" onclick="triggerRefresh()">↻ REFRESH</button>
+      <button class="btn-g" id="livebtn" onclick="toggleSSE()">📡 LIVE</button>
+      <span style="font-size:8px;color:var(--muted);margin-left:4px" id="upd-info">—</span>
+    </div>
+  </div>
+
+  <!-- PROFILE VIEW -->
+  <div class="view active" id="view-profile">
+    <div class="chart-mini-label">
+      <span>NET GEX PROFILE — CURRENT SNAPSHOT</span>
+      <span style="color:var(--muted)">▊ long gamma (calls)  ▊ short gamma (puts)  — key levels</span>
+    </div>
+    <div id="profile-chart" style="flex:1;min-height:0;"><div class="empty"><div class="sp"></div>Load a ticker</div></div>
+  </div>
+
+  <!-- CHART+GEX VIEW -->
+  <div class="view" id="view-chart">
+    <div class="chart-mini-label">
+      <span>CANDLESTICK + GEX PROFILE</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:8px;color:var(--muted)">RES</span>
+        <select class="ctrl" id="ohlc-res" onchange="renderCombined(_data[_ticker])">
+          <option value="1">1m</option>
+          <option value="2">2m</option>
+          <option value="5" selected>5m</option>
+          <option value="15">15m</option>
+          <option value="30">30m</option>
+          <option value="60">1h</option>
+        </select>
+        <span style="font-size:8px;color:var(--muted)">LOOK</span>
+        <select class="ctrl" id="ohlc-hours" onchange="renderCombined(_data[_ticker])">
+          <option value="1">1h</option>
+          <option value="4">4h</option>
+          <option value="6">6h</option>
+          <option value="24" selected>1d</option>
+          <option value="120">5d</option>
+        </select>
+        <span style="font-size:8px;color:var(--muted)" id="ohlc-info">—</span>
+      </div>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;">
+      <div id="chart-price" style="flex:2;min-width:0;min-height:0;border-right:1px solid var(--line);"></div>
+      <div id="chart-gex"   style="flex:1;min-width:0;min-height:0;"></div>
+    </div>
+  </div>
+
+  <!-- HEATMAP VIEW -->
+  <div class="view" id="view-heatmap">
+    <div class="chart-mini-label">
+      <span>NET GEX HEATMAP — STRIKE × EXPIRY</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="hm-info" style="color:var(--muted);font-size:9px">—</span>
+        <span style="font-size:8px;color:var(--muted)">
+          <span style="color:rgba(0,230,118,.9)">■</span> +GEX &nbsp;
+          <span style="color:rgba(255,61,87,.9)">■</span> −GEX &nbsp;
+          <span style="box-shadow:inset 0 0 0 1.5px #00e5ff;padding:0 4px">col max+</span>&nbsp;
+          <span style="box-shadow:inset 0 0 0 1.5px #ff3d57;padding:0 4px">col max−</span>&nbsp;
+          <span style="box-shadow:inset 0 0 0 1.5px #ffab00;padding:0 4px">row max+</span>&nbsp;
+          <span style="box-shadow:inset 0 0 0 1.5px #e040fb;padding:0 4px">row max−</span>
+        </span>
+      </div>
+    </div>
+    <div id="heatmap-chart" style="flex:1;min-height:0;overflow:auto;">
+      <div class="empty"><div class="sp"></div>Load a ticker</div>
+    </div>
+  </div>
+
+  <!-- MATRIX VIEW -->
+  <div class="view" id="view-matrix" style="overflow:auto;">
+    <div id="matrix-container" style="overflow:auto;height:100%;width:100%;">
+      <div class="empty">Load a ticker to see strike × expiry matrix</div>
+    </div>
+  </div>
+
+  <!-- TRADE IDEAS VIEW -->
+  <div class="view" id="view-ideas" style="overflow-y:auto;">
+    <div style="padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <button class="gen-btn" id="gen-btn" onclick="generateIdeas(false)">⚡ GENERATE IDEAS</button>
+      <span style="font-size:9px;color:var(--muted)">AI analysis of GEX levels → specific options strategies</span>
+    </div>
+    <div id="ideas-container" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+      <div class="empty" style="height:200px">Click ⚡ GENERATE IDEAS to get AI-powered options trade recommendations</div>
+    </div>
+  </div>
+
+  <!-- DTE BUCKETS VIEW -->
+  <div class="view" id="view-buckets">
+    <div class="chart-mini-label">
+      <span>GEX BY DTE BUCKET — 0–1d / 2–7d / 8–45d</span>
+      <span id="bkt-info" style="color:var(--muted)">—</span>
+    </div>
+    <div id="bucket-charts" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
+  </div>
+
+  <!-- RESEARCH VIEW -->
+  <div class="view" id="view-research" style="overflow-y:auto;">
+    <div style="padding:10px 14px;display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:4px;">
+        <span style="font-size:11px;font-weight:700;color:var(--cyan)">LEVELS HISTORY</span>
+        <select class="ctrl" id="rsch-days" onchange="loadResearch()">
+          <option value="1">1d</option>
+          <option value="3" selected>3d</option>
+          <option value="7">7d</option>
+          <option value="14">14d</option>
+        </select>
+        <button class="btn-g" onclick="loadResearch()">↻ LOAD</button>
+        <span style="font-size:8px;color:var(--muted)" id="rsch-info">—</span>
+      </div>
+      <div id="rsch-levels-chart" style="height:280px;flex-shrink:0;"><div class="empty">Load to view level history</div></div>
+      <div id="rsch-regime-chart" style="height:140px;flex-shrink:0;"></div>
+      <div id="rsch-bucket-chart" style="height:140px;flex-shrink:0;"></div>
+      <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);padding:4px 0 2px;border-top:1px solid var(--line);">ALERT HISTORY</div>
+      <div id="rsch-alert-log" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- RIGHT SIDEBAR ALERTS -->
+<div id="sidebar-right">
+  <div class="panel-hdr"><span>ALERT FEED <span id="alert-count" style="color:var(--amber);font-size:8px"></span></span><button class="wl-load" onclick="clearTickerAlerts()">CLR</button></div>
+  <div id="alert-feed">
+    <div class="no-al"><span style="font-size:22px;opacity:.2">⚡</span><span>No alerts</span><span style="font-size:8px;max-width:160px">Regime flips · wall approaches · put wall breaches</span></div>
+  </div>
+</div>
+
+</div><!-- /app -->
+<div id="toasts"></div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const SERVER    = location.origin;
+const WATCHLIST = ['SPY','QQQ','AAPL','AMZN','GOOGL','NVDA','META','MSFT','TSLA','AVGO'];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let _ticker  = 'SPY';
+let _data    = {};      // ticker → full api response
+let _wlData  = {};      // ticker → watchlist summary
+let _sse     = null;
+let _sseOn   = false;
+let _autoPoll= null;
+let _wlTimer = null;
+let _alerts  = [];
+let _sseAll  = null;  // SSE stream for cross-ticker alert broadcasts
+let _view    = 'profile';
+
+// ─── Clock ────────────────────────────────────────────────────────────────────
+(function clock(){
+  const et=new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const p=n=>String(n).padStart(2,'0');
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  document.getElementById('clock').textContent=`${days[et.getDay()]} ${p(et.getHours())}:${p(et.getMinutes())}:${p(et.getSeconds())} ET`;
+  setTimeout(clock,1000);
+})();
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg,type='info',ms=3200){
+  const el=document.createElement('div');
+  el.className=`toast ${type}`;el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.style.transition='all .2s';el.style.opacity='0';el.style.transform='translateY(4px)';setTimeout(()=>el.remove(),220);},ms);
+}
+
+// ─── Status ───────────────────────────────────────────────────────────────────
+function setStat(s){document.getElementById('sdot').className='sdot '+s;}
+
+// ─── Fetch ────────────────────────────────────────────────────────────────────
+async function api(path,opts={}){
+  const r=await fetch(SERVER+path,opts);
+  if(!r.ok){let m=`HTTP ${r.status}`;try{const d=await r.json();m=d.detail||d.message||m;}catch{}throw new Error(m);}
+  return r.json();
+}
+
+// ─── View switching ───────────────────────────────────────────────────────────
+function switchView(v){
+  _view=v;
+  document.querySelectorAll('.vtab').forEach((el,i)=>{
+    el.classList.toggle('active', ['profile','chart','heatmap','matrix','ideas','buckets','research'][i]===v);
+  });
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.getElementById(`view-${v}`).classList.add('active');
+  // Allow DOM to paint before Plotly measures containers
+  requestAnimationFrame(()=>{
+    if(v==='ideas' && !_ideasLoaded[_ticker]) generateIdeas();
+    if(v==='research') loadResearch();
+    if(v==='buckets') renderBuckets(_data[_ticker]);
+    window.dispatchEvent(new Event('resize'));
+  });
+  if(_data[_ticker]) redraw();
+}
+
+// ─── Ticker tabs ──────────────────────────────────────────────────────────────
+function buildTabs(){
+  const row=document.getElementById('ticker-tabs');
+  row.innerHTML='';
+  WATCHLIST.forEach(t=>{
+    const btn=document.createElement('button');
+    btn.className='ticker-btn'+(t===_ticker?' active':'');
+    btn.onclick=()=>switchTicker(t);
+    const wl=_wlData[t]||{};
+    const rc=wl.regime==='positive'?'var(--green)':wl.regime==='negative'?'var(--red)':'var(--muted)';
+    btn.innerHTML=`${t}<span class="tk-regime" style="color:${rc}">${wl.regime==='positive'?'▲POS':wl.regime==='negative'?'▼NEG':'—'}</span>`;
+    row.appendChild(btn);
+  });
+}
+
+function switchTicker(t){
+  _ticker=t; buildTabs(); updateWLHighlight();
+  renderAlerts();    // re-render existing alerts filtered to new ticker
+  pollAlerts();      // merge any new ones from server
+  pollSpot();
+  pollSpot._lastOhlc = 0;
+  _data[t] ? renderAll(_data[t]) : loadGEX(t);
+}
+
+// ─── Watchlist ────────────────────────────────────────────────────────────────
+function buildWL(){
+  const el=document.getElementById('wl-items');
+  el.innerHTML='';
+  WATCHLIST.forEach(t=>{
+    const wl=_wlData[t];
+    const div=document.createElement('div');
+    div.className='wl-item'+(t===_ticker?' active':'');
+    div.id=`wl-${t}`;div.onclick=()=>switchTicker(t);
+    if(wl?.loaded){
+      const r=wl.regime||'unknown';
+      const rc=r==='positive'?'rpos':r==='negative'?'rneg':'runk';
+      const rl=r==='positive'?'POS':r==='negative'?'NEG':'?';
+      const gs=(wl.net_gex_b>=0?'+':'')+wl.net_gex_b.toFixed(3)+'B';
+      const gc=wl.net_gex_b>=0?'var(--green)':'var(--red)';
+      div.innerHTML=`<div style="display:flex;justify-content:space-between"><span class="wl-ticker">${t}</span><span class="rbadge ${rc}">${rl}</span></div>
+        <div class="wl-spot">$${wl.spot.toFixed(2)}</div>
+        <div class="wl-meta"><span style="color:${gc}">${gs}</span>${wl.zero_gamma?`<span style="color:var(--muted)">ZG $${Number(wl.zero_gamma).toFixed(0)}</span>`:''}${wl.gamma_wall?`<span style="color:var(--amber)">GW $${Number(wl.gamma_wall).toFixed(0)}</span>`:''}
+        </div>`;
+    } else {
+      div.innerHTML=`<div style="display:flex;justify-content:space-between"><span class="wl-ticker">${t}</span><button class="wl-load" onclick="event.stopPropagation();bgLoad('${t}')">LOAD</button></div><div class="wl-spot" style="color:var(--muted)">not loaded</div>`;
+    }
+    el.appendChild(div);
+  });
+}
+
+function updateWLHighlight(){WATCHLIST.forEach(t=>{const e=document.getElementById(`wl-${t}`);if(e)e.className='wl-item'+(t===_ticker?' active':'');});}
+
+async function bgLoad(t){
+  try{await api(`/api/watchlist/${t}/load`,{method:'POST'});toast(`Loading ${t}…`,'info',5000);}
+  catch(e){toast(e.message,'err');}
+}
+
+async function refreshWL(){
+  try{
+    const d=await api('/api/watchlist');
+    d.watchlist.forEach(w=>{_wlData[w.ticker]=w;});
+    buildWL();buildTabs();
+    document.getElementById('wl-ts').textContent=new Date().toLocaleTimeString();
+  }catch(e){}
+}
+
+// ─── Load / refresh ───────────────────────────────────────────────────────────
+async function loadGEX(t){
+  t=t||_ticker;
+  const btn=document.getElementById('rfbtn');
+  btn.disabled=true;btn.textContent='⏳';setStat('loading');
+  try{
+    const data=await api(`/api/gex/${t}`);
+    _data[t]=data;
+    if(t===_ticker){renderAll(data);setStat('live');}
+    document.getElementById('upd-info').textContent='Updated '+new Date().toLocaleTimeString();
+    // sync to watchlist
+    const lvl=data.levels||{};
+    _wlData[t]={ticker:t,loaded:true,spot:data.spot,net_gex_b:lvl.net_gex_b||0,regime:lvl.regime||'unknown',strength:lvl.regime_strength||0,zero_gamma:lvl.zero_gamma,gamma_wall:lvl.gamma_wall};
+    buildWL();buildTabs();
+    toast(`${t}: ${data.contracts} contracts, ${data.snapshots} snaps`,'ok',2000);
+    clearInterval(_autoPoll);
+    _autoPoll=setInterval(async()=>{
+      try{const fresh=await api(`/api/gex/${t}`);_data[t]=fresh;if(t===_ticker)renderAll(fresh);document.getElementById('upd-info').textContent='Updated '+new Date().toLocaleTimeString();}catch(e){}
+    },300000);
+  }catch(e){setStat('error');toast('Load failed: '+e.message,'err',8000);}
+  finally{btn.disabled=false;btn.textContent='↻ REFRESH';}
+}
+
+async function triggerRefresh(){
+  const t=_ticker;
+  const btn=document.getElementById('rfbtn');
+  btn.disabled=true;btn.textContent='⏳';
+  try{
+    await api(`/api/gex/${t}/refresh`,{method:'POST'});
+    toast(`↻ Refreshing ${t} (~60s — server is fetching fresh chain data)`,'info',7000);
+    setTimeout(async()=>{
+      try{const data=await api(`/api/gex/${t}`);_data[t]=data;renderAll(data);document.getElementById('upd-info').textContent='Refreshed '+new Date().toLocaleTimeString();toast('Done','ok',1500);}catch(e){}
+    },65000);
+  }catch(e){toast(e.message,'err');}
+  finally{btn.disabled=false;btn.textContent='↻ REFRESH';}
+}
+
+function redraw(){if(_data[_ticker])renderAll(_data[_ticker]);}
+
+// ─── SSE ──────────────────────────────────────────────────────────────────────
+function toggleSSE(){_sseOn?disconnSSE():connSSE();}
+function connSSE(){
+  if(_sse)_sse.close();
+  if(_sseAll)_sseAll.close();
+  _sse=new EventSource(`${SERVER}/api/gex/${_ticker}/stream`);_sseOn=true;
+  const b=document.getElementById('livebtn');b.textContent='📡 ●';b.style.color='var(--green)';b.style.borderColor='rgba(0,230,118,.4)';
+  _sse.onmessage=(e)=>{
+    try{const msg=JSON.parse(e.data);
+      if(msg.event==='connected')toast('SSE connected','ok',1500);
+      else if(msg.event==='spot'&&msg.spot){
+        applySpot(msg.spot, msg.source);
+        pollSpot._lastSseSpot = Date.now();
+        maybeRefreshOhlc();
+      }
+      else if(msg.event==='refresh'&&msg.data){_data[_ticker]=msg.data;renderAll(msg.data);document.getElementById('upd-info').textContent='Push '+new Date().toLocaleTimeString();}
+      else if(msg.event==='alerts'&&msg.alerts)msg.alerts.forEach(pushAlert);
+    }catch(e){}
+  };
+  _sse.onerror=()=>{disconnSSE();toast('SSE disconnected','warn');};
+  // ALL stream: cross-ticker alerts from any watchlist ticker
+  _sseAll = new EventSource(`${SERVER}/api/gex/ALL/stream`);
+  _sseAll.onmessage=(e)=>{
+    try{const msg=JSON.parse(e.data);
+      if(msg.event==='alerts'&&msg.alerts) msg.alerts.forEach(pushAlert);
+    }catch(e){}
+  };
+  _sseAll.onerror=()=>{ try{_sseAll.close();}catch(e){} };
+}
+function disconnSSE(){
+  if(_sse){_sse.close();_sse=null;}
+  if(_sseAll){_sseAll.close();_sseAll=null;}
+  _sseOn=false;
+  const b=document.getElementById('livebtn');b.textContent='📡 LIVE';b.style.color='';b.style.borderColor='';
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+function pushAlert(a){
+  if(!a || !a.id) return;
+  // Toast regardless of which ticker
+  if(a.severity==='CRITICAL') toast(`⚡ ${a.ticker} — ${a.msg}`,'err',8000);
+  else if(a.severity==='WARNING') toast(`⚠ ${a.ticker} — ${a.msg}`,'warn',5000);
+  // Dedup by id across all tickers
+  if(_alerts.find(x=>x.id===a.id)) return;
+  _alerts.unshift(a);
+  if(_alerts.length>200) _alerts.pop();
+  renderAlerts();
+}
+// ─── Spot display helpers ─────────────────────────────────────────────────────
+function applySpot(price, source){
+  if(!price) return;
+  const el = document.getElementById('m-spot');
+  if(el) el.textContent = '$' + price.toFixed(2);
+  const srcEl = document.getElementById('spot-source');
+  if(srcEl){
+    const s = source || '';
+    srcEl.textContent = s==='ws'?'● WS':s==='agg'?'● AGG':s==='yfinance'?'● YF':s?'● '+s.toUpperCase():'';
+    srcEl.style.color = s==='ws'?'var(--green)':s==='agg'?'rgba(0,229,255,.8)':'var(--amber)';
+  }
+}
+function maybeRefreshOhlc(){
+  if(_view!=='chart') return;
+  const now = Date.now();
+  if(now - pollSpot._lastOhlc > 60000){
+    pollSpot._lastOhlc = now;
+    if(_data[_ticker]) renderCombined(_data[_ticker]);
+  }
+}
+
+// pollSpot: REST fallback only — SSE spot events are the primary path.
+// Only fires when tab is visible and SSE hasn't sent a spot event recently.
+async function pollSpot(){
+  if(document.visibilityState === 'hidden') return;  // don't hammer when tab hidden
+  const sseAge = Date.now() - (pollSpot._lastSseSpot||0);
+  if(sseAge < 8000) return;  // SSE delivered a spot within 8s — skip REST call
+  try{
+    const d = await api(`/api/spot/${_ticker}`);
+    if(d?.spot){ applySpot(d.spot, d.spot_source); maybeRefreshOhlc(); }
+  }catch(e){}
+}
+pollSpot._lastOhlc   = 0;
+pollSpot._lastSseSpot = 0;
+
+async function pollAlerts(){
+  // Always fetch all watchlist tickers — no ticker filter
+  try{
+    const d = await api(`/api/alerts?limit=200`);
+    const incoming = d.alerts || [];
+    const existIds = new Set(_alerts.map(a=>a.id));
+    const fresh = incoming.filter(a => !existIds.has(a.id));
+    if(fresh.length){
+      fresh.forEach(a => _alerts.push(a));
+      // Sort newest-first after bulk insert
+      _alerts.sort((a,b)=>new Date(b.time)-new Date(a.time));
+      if(_alerts.length > 200) _alerts = _alerts.slice(0,200);
+      renderAlerts();
+    } else {
+      renderAlerts(); // ensure correct state even if no new alerts
+    }
+  }catch(e){
+    console.warn('[pollAlerts] error:', e);
+  }
+}
+function renderAlerts(){
+  const feed=document.getElementById('alert-feed');
+  // Show ALL watchlist tickers' alerts, sorted newest-first
+  // CLR filters by _ticker server-side; delete filters by id
+  if(!_alerts.length){
+    feed.innerHTML=`<div class="no-al"><span style="font-size:22px;opacity:.2">⚡</span><span>No alerts</span><span style="font-size:8px;max-width:160px">Regime flips · wall approaches · put wall breaches</span></div>`;
+    const badge=document.getElementById('alert-count');
+    if(badge) badge.textContent='';
+    return;
+  }
+  feed.innerHTML='';
+  _alerts.slice(0,60).forEach(a=>{
+    const ago=_relTime(a.time);
+    const isCurrent=(a.ticker||'').toUpperCase()===_ticker.toUpperCase();
+    const div=document.createElement('div');
+    div.className=`al-item ${a.severity}${isCurrent?' al-current':''}`;
+    div.innerHTML=`
+      <div class="al-hdr">
+        <span class="al-sev ${a.severity}">${a.severity}</span>
+        <span class="al-ticker${isCurrent?' al-ticker-active':''}">${a.ticker}</span>
+        <span class="al-time">${ago}</span>
+        <button class="al-del" title="Dismiss" onclick="deleteAlert('${a.id}',this)">✕</button>
+      </div>
+      <div class="al-msg">${a.msg}</div>
+      <div class="al-spot">spot $${a.spot}</div>`;
+    feed.appendChild(div);
+  });
+  const badge=document.getElementById('alert-count');
+  if(badge) badge.textContent=`(${_alerts.length})`;
+}
+
+async function deleteAlert(id, btn){
+  try{
+    // Optimistic UI: remove from local array and re-render immediately
+    _alerts = _alerts.filter(a => a.id !== id);
+    renderAlerts();
+    // Persist deletion to server
+    await fetch(`${SERVER}/api/alerts/${encodeURIComponent(id)}`,{method:'DELETE'});
+  }catch(e){ console.warn('deleteAlert error:',e); }
+}
+async function clearTickerAlerts(){
+  const t = _ticker;
+  // Optimistic: remove from local state immediately
+  _alerts = _alerts.filter(a => (a.ticker||'').toUpperCase() !== t.toUpperCase());
+  renderAlerts();
+  try{
+    await fetch(`${SERVER}/api/alerts/ticker/${t}`,{method:'DELETE'});
+  }catch(e){ console.warn('clearTickerAlerts error:',e); }
+}
+
+function _relTime(iso){
+  const s=Math.round((Date.now()-new Date(iso).getTime())/1000);
+  if(s<60)return s+'s ago';
+  if(s<3600)return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+
+// ─── Render all ───────────────────────────────────────────────────────────────
+function renderAll(data){
+  renderMetrics(data);
+  if(_view==='profile')  renderProfile(data);
+  else if(_view==='chart')    renderCombined(data);
+  else if(_view==='heatmap')  renderHeatmap(data);
+  else if(_view==='matrix')   renderMatrix(data);
+  else if(_view==='buckets')  renderBuckets(data);
+  else if(_view==='research') renderResearchCharts(_rschData);
+}
+
+// ─── Metrics bar ─────────────────────────────────────────────────────────────
+function renderMetrics(data){
+  const lvl=data.levels||{};
+  const spot=data.spot;
+  const $=id=>document.getElementById(id);
+  const fmt=v=>v!=null?'$'+Number(v).toFixed(2):'—';
+  $('m-spot').textContent=spot?`$${spot.toFixed(2)}`:'—';
+  {const s=data.spot_source||'';const srcEl=document.getElementById('spot-source');
+   if(srcEl){srcEl.textContent=s==='ws'?'● WS':s==='agg'?'● AGG':s==='yfinance'?'● YF':s?'● '+s.toUpperCase():'';
+   srcEl.style.color=s==='ws'?'var(--green)':s==='agg'?'rgba(0,229,255,.8)':'var(--amber)';}}
+  const zg=lvl.zero_gamma;
+  $('m-zg').textContent=fmt(zg);
+  $('m-zg').style.color=spot&&zg?(spot>zg?'var(--green)':'var(--red)'):'var(--white)';
+  const dist=lvl.dist_to_flip_pct;
+  $('m-zg-dist').textContent=dist!=null?(dist>0?'+':'')+dist.toFixed(2)+'% from spot':'regime flip level';
+  $('m-gw').textContent=fmt(lvl.gamma_wall);
+  $('m-cw').textContent=fmt(lvl.call_wall);
+  $('m-pw').textContent=fmt(lvl.put_wall);
+  const net=lvl.net_gex_b||0;
+  $('m-net').textContent=(net>=0?'+':'')+net.toFixed(3)+'B';
+  $('m-net').style.color=net>=0?'var(--green)':'var(--red)';
+  $('m-skew').textContent=lvl.gex_skew?`skew ${lvl.gex_skew} (${lvl.gex_skew>1?'call-heavy':'put-heavy'})`:'—';
+  $('m-ctrs').textContent=(data.contracts||0).toLocaleString();
+  $('m-snaps').textContent=(data.snapshots||0)+' snaps';
+  const r=lvl.regime||'unknown';const s=lvl.regime_strength||0;
+  $('m-regime').textContent=r==='positive'?'POS GEX':r==='negative'?'NEG GEX':'—';
+  $('m-regime').style.color=r==='positive'?'var(--green)':r==='negative'?'var(--red)':'var(--muted)';
+  $('regime-fill').style.width=((s+1)/2*100)+'%';
+  $('regime-fill').style.background=r==='positive'?'var(--green)':r==='negative'?'var(--red)':'var(--muted)';
+  $('m-strength').textContent=(s*(100)).toFixed(1)+'%';
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const PB={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:'#4a6080',family:'IBM Plex Mono, monospace',size:10}};
+
+function winFilter(strikes,vals,spot,pct){
+  if(!spot||pct>=1)return{strikes,vals};
+  const lo=spot*(1-pct),hi=spot*(1+pct),fs=[],fv=[];
+  strikes.forEach((s,i)=>{if(s>=lo&&s<=hi){fs.push(s);fv.push(vals[i]);}});
+  return{strikes:fs,vals:fv};
+}
+function p95(flat,p=0.95){const a=flat.map(Math.abs).filter(v=>v>0).sort((a,b)=>a-b);if(!a.length)return 0.001;return a[Math.min(Math.floor(a.length*p),a.length-1)]||0.001;}
+
+function levelShapes(lvl, strikes, orient='v'){
+  // orient: 'v' for vertical (bar/profile), 'h' for horizontal (heatmap)
+  const shapes=[], annots=[];
+  const defs=[
+    {k:'zero_gamma', c:'rgba(255,255,255,0.8)', d:'dot',  lbl:'ZGL'},
+    {k:'gamma_wall', c:'rgba(255,171,0,0.85)',  d:'dash', lbl:'WALL'},
+    {k:'call_wall',  c:'rgba(0,230,118,0.75)',  d:'dot',  lbl:'CALL'},
+    {k:'put_wall',   c:'rgba(255,61,87,0.75)',  d:'dot',  lbl:'PUT'},
+  ];
+  const minS=strikes?strikes[0]:0, maxS=strikes?strikes[strikes.length-1]:99999;
+  defs.forEach(({k,c,d,lbl})=>{
+    const v=lvl[k];if(!v)return;
+    if(strikes&&(v<minS||v>maxS))return;
+    if(orient==='v'){
+      shapes.push({type:'line',x0:v,x1:v,y0:0,y1:1,xref:'x',yref:'paper',line:{color:c,width:1,dash:d}});
+      annots.push({x:v,y:0.97,xref:'x',yref:'paper',text:lbl,showarrow:false,font:{color:c,size:8},bgcolor:'rgba(6,8,16,.85)',borderpad:2,yanchor:'top'});
+    } else {
+      shapes.push({type:'line',y0:v,y1:v,x0:0,x1:1,xref:'paper',yref:'y',line:{color:c,width:1,dash:d}});
+      annots.push({y:v,x:1.01,xref:'paper',yref:'y',text:lbl,showarrow:false,font:{color:c,size:8},xanchor:'left',bgcolor:'rgba(6,8,16,.85)',borderpad:2});
+    }
+  });
+  return {shapes,annots};
+}
+
+// ─── PROFILE VIEW (vertical bars) ────────────────────────────────────────────
+function renderProfile(data){
+  const el=document.getElementById('profile-chart');
+  const b=data.bar;const lvl=data.levels||{};
+  if(!b?.strikes.length){el.innerHTML='<div class="empty">No data</div>';return;}
+  const pct=parseFloat(document.getElementById('win-sel').value);
+  const {strikes,vals}=winFilter(b.strikes,b.gex_b,data.spot,pct);
+  const colors=vals.map(v=>v>=0?'#00e676':'#ff3d57');
+  const absMax=Math.max(...vals.map(Math.abs),0.0001);
+
+  // Spot line
+  const shapes=[],annots=[];
+  if(data.spot){
+    shapes.push({type:'line',x0:data.spot,x1:data.spot,y0:0,y1:1,xref:'x',yref:'paper',line:{color:'#00e5ff',width:1.5,dash:'dash'}});
+    annots.push({x:data.spot,y:0.98,xref:'x',yref:'paper',text:`$${data.spot.toFixed(2)}`,showarrow:false,font:{color:'#00e5ff',size:9},bgcolor:'rgba(6,8,16,.9)',borderpad:2,yanchor:'top'});
+  }
+  const {shapes:ls,annots:la}=levelShapes(lvl,strikes,'v');
+  const layout={...PB,
+    xaxis:{gridcolor:'#1c2a45',tickfont:{size:9},zeroline:false,range:pct<1?[data.spot*(1-pct),data.spot*(1+pct)]:undefined},
+    yaxis:{gridcolor:'#1c2a45',zeroline:true,zerolinecolor:'rgba(255,255,255,.12)',zerolinewidth:1.5,range:[-absMax*1.3,absMax*1.3],tickfont:{size:9},title:{text:'Net GEX ($B)',font:{size:9,color:'#4a6080'}}},
+    margin:{l:60,r:10,t:4,b:40},bargap:0.08,shapes:[...shapes,...ls],annotations:[...annots,...la],
+  };
+  Plotly.react(el,[{type:'bar',x:strikes,y:vals,marker:{color:colors},hovertemplate:'<b>$%{x}</b><br>GEX: %{y:.5f}B<extra></extra>'}],layout,{responsive:true,displayModeBar:false});
+}
+
+// ─── COMBINED CHART + GEX VIEW (image 3 style) ───────────────────────────────
+function renderCombined(data){
+  const elPrice = document.getElementById('chart-price');
+  const elGex   = document.getElementById('chart-gex');
+  if (!elPrice || !elGex) return;
+
+  const b    = data?.bar;
+  const lvl  = data?.levels || {};
+  const spot = data?.spot;
+
+  if (!b?.strikes?.length) {
+    elPrice.innerHTML = '<div class="empty">No data</div>';
+    elGex.innerHTML   = '<div class="empty">No data</div>';
+    return;
+  }
+
+  const pct   = parseFloat(document.getElementById('win-sel').value);
+  const res   = document.getElementById('ohlc-res')?.value   || '5';
+  const hours = document.getElementById('ohlc-hours')?.value || '6';
+
+  // ── Strike / GEX filter ───────────────────────────────────────────────────
+  const {strikes:fs, vals:fv} = winFilter(b.strikes, b.gex_b, spot, pct);
+  const barColors = fv.map(v => v>=0 ? 'rgba(0,230,118,0.85)' : 'rgba(255,61,87,0.85)');
+  const absMax    = Math.max(...fv.map(Math.abs), 0.0001);
+  const yRange    = pct < 1 ? [spot*(1-pct), spot*(1+pct)]
+                             : spot ? [spot*0.90, spot*1.10] : undefined;
+
+  // ── Level shapes (price chart) ────────────────────────────────────────────
+  const shapes=[], annots=[];
+  const levelDefs=[
+    {k:'zero_gamma', c:'rgba(255,255,255,.85)', d:'dot',  lbl:'ZGL'},
+    {k:'gamma_wall', c:'rgba(255,171,0,.9)',    d:'dash', lbl:'WALL'},
+    {k:'call_wall',  c:'rgba(0,230,118,.8)',    d:'dot',  lbl:'CALL'},
+    {k:'put_wall',   c:'rgba(255,61,87,.8)',    d:'dot',  lbl:'PUT'},
+  ];
+  levelDefs.forEach(({k,c,d,lbl})=>{
+    const v=lvl[k]; if(!v) return;
+    if(yRange && (v<yRange[0]||v>yRange[1])) return;
+    shapes.push({type:'line',y0:v,y1:v,x0:0,x1:1,xref:'paper',yref:'y',
+                 line:{color:c,width:1.2,dash:d}});
+    annots.push({y:v,x:0.01,xref:'paper',yref:'y',
+                 text:`${lbl} $${Number(v).toFixed(0)}`,
+                 showarrow:false,font:{color:c,size:8},xanchor:'left',
+                 bgcolor:'rgba(6,8,16,.85)',borderpad:2});
+  });
+  if(spot){
+    shapes.push({type:'line',y0:spot,y1:spot,x0:0,x1:1,xref:'paper',yref:'y',
+                 line:{color:'rgba(0,229,255,.5)',width:1,dash:'dash'}});
+    annots.push({y:spot,x:0.99,xref:'paper',yref:'y',
+                 text:`$${spot.toFixed(2)}`,showarrow:false,
+                 font:{color:'#00e5ff',size:9},xanchor:'right',
+                 bgcolor:'rgba(6,8,16,.9)',borderpad:2});
+  }
+
+  // ── Level lines on GEX chart too ──────────────────────────────────────────
+  const gexShapes=[];
+  levelDefs.forEach(({k,c,d})=>{
+    const v=lvl[k]; if(!v) return;
+    if(yRange && (v<yRange[0]||v>yRange[1])) return;
+    gexShapes.push({type:'line',y0:v,y1:v,x0:0,x1:1,xref:'paper',yref:'y',
+                    line:{color:c,width:1,dash:d}});
+  });
+  if(spot) gexShapes.push({type:'line',y0:spot,y1:spot,x0:0,x1:1,
+                            xref:'paper',yref:'y',
+                            line:{color:'rgba(0,229,255,.5)',width:1,dash:'dash'}});
+
+  // ── GEX bars (right panel — static, no OHLC needed) ──────────────────────
+  Plotly.react(elGex,
+    [{type:'bar', x:fv, y:fs, orientation:'h',
+      marker:{color:barColors},
+      hovertemplate:'<b>$%{y}</b><br>%{x:.5f}B<extra></extra>'}],
+    { ...PB,
+      xaxis:{gridcolor:'#1c2a45',tickfont:{size:9},zeroline:true,
+             zerolinecolor:'rgba(255,255,255,.2)',zerolinewidth:1.5,
+             range:[-absMax*1.25,absMax*1.25],
+             title:{text:'Net GEX ($B)',font:{size:8,color:'#4a6080'}}},
+      yaxis:{gridcolor:'#1c2a45',tickfont:{size:9},range:yRange,showticklabels:false},
+      margin:{l:4,r:8,t:8,b:44}, bargap:0.06, shapes:gexShapes },
+    {responsive:true, displayModeBar:false}
+  );
+
+  // ── Fetch OHLC and render candlestick ─────────────────────────────────────
+  const ohlcInfo = document.getElementById('ohlc-info');
+  if(ohlcInfo) ohlcInfo.textContent = 'loading…';
+
+  if(document.visibilityState==='hidden') return;  // skip if tab not visible
+  fetch(`${SERVER}/api/ohlc/${_ticker}?resolution=${res}&hours=${hours}`)
+    .then(r => r.json())
+    .then(d => {
+      const bars = d.bars || [];
+      if(ohlcInfo) ohlcInfo.textContent = bars.length ? `${bars.length} bars` : 'no data';
+
+      const ts = bars.map(b => new Date(b.t).toISOString());
+      const o  = bars.map(b => b.o);
+      const h  = bars.map(b => b.h);
+      const l  = bars.map(b => b.l);
+      const c  = bars.map(b => b.c);
+
+      // Use actual candle price range (tight) — don't inherit strike window
+      const allPrices = [...o,...h,...l,...c].filter(Boolean);
+      let finalYRange;
+      if(allPrices.length){
+        const lo = Math.min(...allPrices);
+        const hi = Math.max(...allPrices);
+        const pad = Math.max((hi-lo)*0.05, 0.5);  // 5% padding, min 50c
+        finalYRange = [lo - pad, hi + pad];
+      } else {
+        // No candles: tight range around spot (±2%)
+        finalYRange = spot ? [spot*0.98, spot*1.02] : yRange;
+      }
+
+      const traces = [];
+
+      if(bars.length > 1){
+        traces.push({
+          type: 'candlestick',
+          x: ts, open: o, high: h, low: l, close: c,
+          name: _ticker,
+          increasing:{line:{color:'#00e676',width:1}, fillcolor:'rgba(0,230,118,0.7)'},
+          decreasing:{line:{color:'#ff3d57',width:1}, fillcolor:'rgba(255,61,87,0.7)'},
+          hoverinfo: 'x+y',
+          whiskerwidth: 0.3,
+        });
+      } else {
+        // No candle data yet — show spot as a reference line with message
+        if(ohlcInfo) ohlcInfo.textContent = 'no bars — try wider lookback or lower res';
+        const now = new Date().toISOString();
+        const ago = new Date(Date.now() - 60*60*1000).toISOString();
+        traces.push({type:'scatter', x:[ago, now], y:[spot||0, spot||0],
+                     mode:'lines', line:{color:'rgba(0,229,255,0.4)',width:1,dash:'dot'},
+                     hovertemplate:'$%{y:.2f}<extra>Spot (no bars)</extra>'});
+      }
+
+      Plotly.react(elPrice, traces,
+        { ...PB,
+          xaxis:{type:'date', gridcolor:'#1c2a45', tickfont:{size:9},
+                 tickformat:'%H:%M', rangeslider:{visible:false}},
+          yaxis:{gridcolor:'#1c2a45', tickfont:{size:9},
+                 range: finalYRange,
+                 title:{text:'Price ($)',font:{size:9,color:'#4a6080'}}},
+          margin:{l:62,r:8,t:8,b:44},
+          shapes, annotations:annots },
+        {responsive:true, displayModeBar:false}
+      );
+    })
+    .catch(err => {
+      console.error('OHLC fetch error:', err);
+      if(ohlcInfo) ohlcInfo.textContent = 'error';
+      elPrice.innerHTML = '<div class="empty">OHLC fetch failed</div>';
+    });
+}
+
+
+// ─── HEATMAP VIEW — Strike × Expiry Net GEX ──────────────────────────────────
+function renderHeatmap(data){
+  const el    = document.getElementById('heatmap-chart');
+  const byExp = data.by_expiry;
+  const spot  = data.spot;
+
+  if(!byExp || !Object.keys(byExp).length){
+    el.innerHTML='<div class="empty">No expiry data — re-bootstrap needed</div>';
+    return;
+  }
+
+  const expiries  = Object.keys(byExp).sort();
+  const strikeSet = new Set();
+  expiries.forEach(exp => Object.keys(byExp[exp]).forEach(s => strikeSet.add(parseFloat(s))));
+  const allStrikes = Array.from(strikeSet).sort((a,b) => b - a); // highest at top
+
+  // Filter strikes to window
+  const pct = parseFloat(document.getElementById('win-sel').value);
+  const dispStrikes = (pct < 1 && spot)
+    ? allStrikes.filter(s => s >= spot*(1-pct) && s <= spot*(1+pct))
+    : allStrikes;
+
+  // ── Per-column (expiry) and per-row (strike) max/min cells ────────────────
+  const colMaxV = {}, colMinV = {};
+  expiries.forEach(exp => {
+    let mx = -Infinity, mn = Infinity;
+    dispStrikes.forEach(s => {
+      const v = byExp[exp]?.[String(s)] ?? 0;
+      if(v > mx) mx = v;
+      if(v < mn) mn = v;
+    });
+    colMaxV[exp] = mx > 0 ? mx : null;
+    colMinV[exp] = mn < 0 ? mn : null;
+  });
+
+  const rowMaxV = {}, rowMinV = {};
+  dispStrikes.forEach(s => {
+    let mx = -Infinity, mn = Infinity;
+    expiries.forEach(exp => {
+      const v = byExp[exp]?.[String(s)] ?? 0;
+      if(v > mx) mx = v;
+      if(v < mn) mn = v;
+    });
+    rowMaxV[s] = mx > 0 ? mx : null;
+    rowMinV[s] = mn < 0 ? mn : null;
+  });
+
+  // ── Color helpers ──────────────────────────────────────────────────────────
+  const allVals = expiries.flatMap(exp =>
+    dispStrikes.map(s => byExp[exp]?.[String(s)] ?? 0)
+  );
+  const maxAbs = p95(allVals, 0.95) || 0.001;
+
+  function cellBg(v){
+    if(!v) return 'rgba(0,0,0,0)';
+    const t = Math.min(Math.abs(v)/maxAbs, 1);
+    return v > 0
+      ? `rgba(0,200,100,${(0.08+t*0.72).toFixed(2)})`
+      : `rgba(220,50,70,${(0.08+t*0.72).toFixed(2)})`;
+  }
+  function cellFg(v){ return v >= 0 ? 'rgba(0,230,118,.95)' : 'rgba(255,80,100,.95)'; }
+  function fmtV(v){
+    if(v == null || v === 0) return '';
+    const a = Math.abs(v);
+    const sign = v > 0 ? '+' : '';
+    if(a >= 1)     return sign+v.toFixed(2)+'B';
+    if(a >= 0.001) return sign+v.toFixed(3)+'B';
+    const m = v*1000; return (m>0?'+':'')+m.toFixed(1)+'M';
+  }
+  function fmtExp(exp){
+    try{ return new Date(exp+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+    catch{ return exp; }
+  }
+  function dte(exp){
+    const d = Math.round((new Date(exp+'T16:00:00') - Date.now()) / 86400000);
+    return d >= 0 ? d+'d' : '';
+  }
+  function isSame(a, b){ return a != null && b != null && Math.abs(a-b) < 1e-9; }
+
+  // Totals
+  const colTotals = {};
+  expiries.forEach(exp => {
+    colTotals[exp] = dispStrikes.reduce((a,s) => a+(byExp[exp]?.[String(s)]??0), 0);
+  });
+  const rowTotals = {};
+  dispStrikes.forEach(s => {
+    rowTotals[s] = expiries.reduce((a,exp) => a+(byExp[exp]?.[String(s)]??0), 0);
+  });
+  const grand = dispStrikes.reduce((a,s) => a+(rowTotals[s]||0), 0);
+
+  // ── Build table HTML ───────────────────────────────────────────────────────
+  let html = `<table id="matrix-table"><thead>
+<tr>
+  <th class="strike-col" rowspan="2" style="vertical-align:bottom;padding-bottom:6px">STRIKE</th>`;
+
+  expiries.forEach(exp => {
+    const tot = colTotals[exp];
+    const tc  = tot >= 0 ? 'var(--green)' : 'var(--red)';
+    html += `<th style="min-width:78px;padding:3px 4px;border-bottom:1px solid #1c2a45;text-align:center">
+      <div style="font-size:10px;font-weight:700">${fmtExp(exp)}</div>
+      <div style="font-size:8px;color:var(--muted)">${dte(exp)}</div>
+      <div style="font-size:8px;color:${tc}">${fmtV(tot)||'—'}</div>
+    </th>`;
+  });
+  html += `<th style="min-width:76px;border-bottom:1px solid #1c2a45">TOTAL</th>
+</tr>
+<tr style="font-size:7px;color:var(--muted)">`;
+
+  expiries.forEach(exp => {
+    const mx = colMaxV[exp], mn = colMinV[exp];
+    html += `<th style="padding:2px 3px;font-weight:normal;border-bottom:2px solid #1c2a45;text-align:center">
+      ${mx!=null?`<span style="color:rgba(0,230,118,.7)">▲${fmtV(mx)}</span>`:''}
+      ${mn!=null?`<span style="color:rgba(255,61,87,.7)"> ▼${fmtV(mn)}</span>`:''}
+    </th>`;
+  });
+  html += `<th style="border-bottom:2px solid #1c2a45"></th></tr>
+</thead><tbody>`;
+
+  dispStrikes.forEach(s => {
+    const isSpot = spot && Math.abs(s-spot)/spot < 0.005;
+    const spotSt = isSpot ? 'outline:2px solid rgba(0,229,255,0.55);outline-offset:-1px;' : '';
+    const rmx = rowMaxV[s], rmn = rowMinV[s];
+
+    html += `<tr>
+<td class="strike-cell" style="${spotSt}">
+  <span style="font-weight:600">${isSpot?'▶ ':''}$${s.toFixed(0)}</span>
+  <br><span style="font-size:7px">
+    ${rmx!=null?`<span style="color:rgba(0,230,118,.6)">↑${fmtV(rmx)}</span>`:''}
+    ${rmn!=null?`<span style="color:rgba(255,61,87,.6)"> ↓${fmtV(rmn)}</span>`:''}
+  </span>
+</td>`;
+
+    expiries.forEach(exp => {
+      const v   = byExp[exp]?.[String(s)] ?? 0;
+      const bg  = cellBg(v);
+      const txt = fmtV(v);
+
+      // Border priority: col max+ (cyan) > col max- (red) > row max+ (gold) > row max- (magenta)
+      let bdr = '';
+      if(isSame(v, colMaxV[exp]))      bdr = 'box-shadow:inset 0 0 0 1.5px #00e5ff;';
+      else if(isSame(v, colMinV[exp])) bdr = 'box-shadow:inset 0 0 0 1.5px #ff3d57;';
+      else if(isSame(v, rowMaxV[s]))   bdr = 'box-shadow:inset 0 0 0 1.5px #ffab00;';
+      else if(isSame(v, rowMinV[s]))   bdr = 'box-shadow:inset 0 0 0 1.5px #e040fb;';
+
+      html += `<td style="background:${bg};color:${txt?cellFg(v):'transparent'};${bdr}">${txt||'·'}</td>`;
+    });
+
+    const rt = rowTotals[s]||0;
+    html += `<td style="background:${cellBg(rt)};color:${cellFg(rt)}"><b>${fmtV(rt)}</b></td>
+</tr>`;
+  });
+
+  // Total row
+  html += `<tr class="total-row"><td class="strike-cell" style="color:var(--amber)">TOTAL</td>`;
+  expiries.forEach(exp => {
+    const v = colTotals[exp];
+    html += `<td style="color:${v>=0?'var(--green)':'var(--red)'}"><b>${fmtV(v)}</b></td>`;
+  });
+  html += `<td style="color:${grand>=0?'var(--green)':'var(--red)'}"><b>${fmtV(grand)}</b></td>
+</tr></tbody></table>`;
+
+  el.innerHTML = html;
+  document.getElementById('hm-info').textContent =
+    `${dispStrikes.length} strikes · ${expiries.length} expiries · scale=${maxAbs.toFixed(3)}B`;
+
+  // Scroll nearest-to-spot row into view
+  if(spot){
+    const trs = el.querySelectorAll('tbody tr');
+    let best = null, bestD = Infinity;
+    trs.forEach(tr => {
+      const cell = tr.querySelector('td.strike-cell span');
+      if(!cell) return;
+      const sv = parseFloat(cell.textContent.replace(/[^\d.]/g,''));
+      const d  = Math.abs(sv - spot);
+      if(d < bestD){ bestD = d; best = tr; }
+    });
+    if(best) best.scrollIntoView({block:'center', behavior:'smooth'});
+  }
+}
+
+
+// ─── MATRIX VIEW (image 2 style — strike × expiry) ────────────────────────────
+function renderMatrix(data){
+  const mc=document.getElementById('matrix-container');
+  const byExp=data.by_expiry;
+  const spot=data.spot;
+
+  if(!byExp||!Object.keys(byExp).length){
+    mc.innerHTML='<div class="empty">No per-expiry data — restart server to re-bootstrap with expiry tracking</div>';return;
+  }
+
+  const expiries=Object.keys(byExp).sort();
+
+  // Collect all strikes across all expiries
+  const strikeSet=new Set();
+  expiries.forEach(exp=>Object.keys(byExp[exp]).forEach(s=>strikeSet.add(parseFloat(s))));
+  const allStrikes=Array.from(strikeSet).sort((a,b)=>b-a); // descending (highest at top)
+
+  // Compute column totals
+  const colTotals={};
+  expiries.forEach(exp=>{
+    colTotals[exp]=Object.values(byExp[exp]).reduce((a,v)=>a+v,0);
+  });
+
+  // Compute row totals
+  const rowTotals={};
+  allStrikes.forEach(s=>{
+    rowTotals[s]=expiries.reduce((a,exp)=>a+(byExp[exp][String(s)]||0),0);
+  });
+
+  // Color scale: 0 = white, positive = green, negative = red
+  // Use 95th pct for max color
+  const allVals=expiries.flatMap(exp=>Object.values(byExp[exp]));
+  const maxAbs=p95(allVals,0.95)||0.001;
+
+  function cellColor(v){
+    if(v===0||v==null)return'rgba(0,0,0,0)';
+    const t=Math.min(Math.abs(v)/maxAbs,1);
+    if(v>0)return`rgba(0,230,118,${(0.15+t*0.70).toFixed(2)})`;
+    return`rgba(255,61,87,${(0.15+t*0.70).toFixed(2)})`;
+  }
+  function fmtVal(v){
+    if(v==null||v===0)return'';
+    const abs=Math.abs(v);
+    if(abs>=1)return(v>0?'+':'')+v.toFixed(2)+'B';
+    if(abs>=0.001)return(v>0?'+':'')+v.toFixed(3)+'B';
+    const m=v*1000;return(m>0?'+':'')+m.toFixed(1)+'M';
+  }
+  function fmtExp(exp){
+    try{const d=new Date(exp+'T00:00:00');return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+    catch{return exp;}
+  }
+
+  // Filter strikes to window
+  const pct=parseFloat(document.getElementById('win-sel').value);
+  const dispStrikes = pct<1 && spot
+    ? allStrikes.filter(s=>s>=spot*(1-pct)&&s<=spot*(1+pct))
+    : allStrikes;
+
+  let html=`<table id="matrix-table"><thead><tr>
+    <th class="strike-col">STRIKE</th>`;
+  expiries.forEach(exp=>{
+    const tot=colTotals[exp];
+    const tc=tot>=0?'var(--green)':'var(--red)';
+    const ts=fmtVal(tot);
+    html+=`<th style="min-width:90px"><div>${fmtExp(exp)}</div><div style="color:${tc};font-size:9px">${ts}</div></th>`;
+  });
+  html+=`<th style="min-width:90px">TOTAL</th></tr></thead><tbody>`;
+
+  dispStrikes.forEach(s=>{
+    const isNearSpot=spot&&Math.abs(s-spot)/spot<0.005;
+    const rowStyle=isNearSpot?'border:2px solid rgba(0,229,255,0.5);':'';
+    html+=`<tr style="${rowStyle}"><td class="strike-cell">${isNearSpot?'▶':''} $${Number(s).toFixed(1)}</td>`;
+    expiries.forEach(exp=>{
+      const v=byExp[exp][String(s)]||0;
+      const bg=cellColor(v);
+      const txt=fmtVal(v);
+      html+=`<td style="background:${bg};color:${v>=0?'rgba(0,230,118,.9)':'rgba(255,61,87,.9)'}">${txt}</td>`;
+    });
+    const rt=rowTotals[s]||0;
+    html+=`<td style="background:${cellColor(rt)};color:${rt>=0?'rgba(0,230,118,.9)':'rgba(255,61,87,.9)'}"><b>${fmtVal(rt)}</b></td></tr>`;
+  });
+
+  // Total row
+  html+=`<tr class="total-row"><td class="strike-cell" style="color:var(--amber)">TOTAL</td>`;
+  expiries.forEach(exp=>{
+    const v=colTotals[exp];
+    html+=`<td style="color:${v>=0?'var(--green)':'var(--red)'}"><b>${fmtVal(v)}</b></td>`;
+  });
+  const grandTotal=Object.values(rowTotals).reduce((a,v)=>a+v,0);
+  html+=`<td style="color:${grandTotal>=0?'var(--green)':'var(--red)'}"><b>${fmtVal(grandTotal)}</b></td></tr>`;
+  html+=`</tbody></table>`;
+
+  mc.innerHTML=html;
+
+  // Scroll to near-spot row
+  if(spot){
+    const closest=dispStrikes.reduce((a,s)=>Math.abs(s-spot)<Math.abs(a-spot)?s:a,dispStrikes[0]);
+    const rows=mc.querySelectorAll('tr');
+    rows.forEach(r=>{if(r.querySelector('.strike-cell')?.textContent.includes(closest.toFixed(1)))r.scrollIntoView({block:'center',behavior:'smooth'});});
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load',async()=>{
+  buildTabs();buildWL();
+  await loadGEX(_ticker);
+  pollAlerts();
+  pollSpot();
+  refreshWL();
+  _wlTimer=setInterval(refreshWL,300000);
+  setInterval(pollAlerts, 30000);
+  setInterval(pollSpot, 15000);  // REST fallback — SSE spot events are primary
+});
+
+// ─── Trade Ideas ──────────────────────────────────────────────────────────────
+let _ideasLoaded = {};  // ticker → bool
+
+async function generateIdeas(force=false) {
+  const t = _ticker;
+  const container = document.getElementById('ideas-container');
+  container.innerHTML = `<div class="empty" style="height:120px"><div class="sp"></div>&nbsp;Claude is analyzing GEX data for ${t}…</div>`;
+
+  const btn = document.getElementById('gen-btn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Analyzing…'; }
+
+  try {
+    const url = `/api/trade-ideas/${t}${force?'?force=true':''}`;
+    const data = await api(url);
+    _ideasLoaded[t] = true;
+    renderIdeas(data, container);
+  } catch(e) {
+    container.innerHTML = `<div class="empty" style="height:120px;flex-direction:column;gap:8px">
+      <span style="color:var(--red)">Generation failed</span>
+      <span style="font-size:9px">${e.message}</span>
+      <span style="font-size:8px;color:var(--muted)">Make sure ${t} is loaded and the server has ANTHROPIC_API_KEY set</span>
+    </div>`;
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='⚡ GENERATE'; }
+  }
+}
+
+function renderIdeas(data, container) {
+  const ideas  = data.ideas || [];
+  const lvl    = data.levels || {};
+  const cached = data.cached ? ` · cached ${data.cache_age_s}s ago` : ' · fresh';
+  const regime = data.regime || '—';
+  const rc     = regime==='positive'?'var(--green)':regime==='negative'?'var(--red)':'var(--muted)';
+
+  let html = `
+    <div class="ideas-header">
+      <div>
+        <span style="font-size:12px;font-weight:700;color:var(--cyan)">${data.ticker}</span>
+        <span style="font-size:10px;color:var(--white);margin-left:8px">$${data.spot?.toFixed(2)}</span>
+        <span style="font-size:9px;margin-left:8px;color:${rc}">${regime.toUpperCase()} REGIME</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="ideas-meta">${ideas.length} ideas${cached}</span>
+        <button class="gen-btn" id="gen-btn" onclick="generateIdeas(true)">⚡ GENERATE</button>
+      </div>
+    </div>
+    <div class="ideas-meta" style="margin-bottom:6px">
+      ZGL: <span style="color:var(--white)">$${lvl.zero_gamma||'—'}</span> &nbsp;
+      GW: <span style="color:var(--amber)">$${lvl.gamma_wall||'—'}</span> &nbsp;
+      CW: <span style="color:var(--green)">$${lvl.call_wall||'—'}</span> &nbsp;
+      PW: <span style="color:var(--red)">$${lvl.put_wall||'—'}</span>
+    </div>`;
+
+  ideas.forEach(idea => {
+    const dir    = (idea.direction||'neutral').toLowerCase();
+    const dirCls = dir==='bullish'?'dir-bullish':dir==='bearish'?'dir-bearish':'dir-neutral';
+    const confCls= (idea.confidence||'medium').toLowerCase();
+    const tags   = (idea.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('');
+
+    const legsRows = (idea.legs||[]).map(leg=>{
+      const ac = leg.action==='BUY'?'buy':'sell';
+      return `<tr>
+        <td class="${ac}">${leg.action}</td>
+        <td>${leg.type}</td>
+        <td>$${leg.strike}</td>
+        <td>${leg.expiry_dte}d DTE</td>
+        <td style="color:var(--muted)">${leg.note||''}</td>
+      </tr>`;
+    }).join('');
+
+    html += `
+    <div class="idea-card ${dir}">
+      <div class="idea-hdr">
+        <span class="idea-strategy">${idea.strategy}</span>
+        <span class="idea-dir ${dirCls}">${dir.toUpperCase()}</span>
+        <span class="idea-conf ${confCls}">● ${(idea.confidence||'').toUpperCase()}</span>
+        <span class="idea-rr">${idea.risk_reward||''}</span>
+      </div>
+      <div class="idea-body">
+        <div class="idea-setup">${idea.setup||''}</div>
+
+        <div class="idea-section">
+          <div class="idea-section-label">LEGS</div>
+          <table class="legs-table">
+            <tr style="color:var(--muted);font-size:8px"><td>ACT</td><td>TYPE</td><td>STRIKE</td><td>DTE</td><td>NOTE</td></tr>
+            ${legsRows}
+          </table>
+        </div>
+
+        <div class="idea-section">
+          <div class="idea-section-label">TRADE PARAMETERS</div>
+          <div class="idea-section-val">
+            <div>Entry: <span style="color:var(--cyan)">${idea.target_credit_debit||'—'}</span></div>
+            <div>Max profit: <span style="color:var(--green)">${idea.max_profit||'—'}</span></div>
+            <div>Max loss: <span style="color:var(--red)">${idea.max_loss||'—'}</span></div>
+            <div>Stop: ${idea.stop_loss||'—'}</div>
+            <div>Target: ${idea.profit_target||'—'}</div>
+          </div>
+        </div>
+
+        <div class="idea-section">
+          <div class="idea-section-label">ENTRY CONDITION</div>
+          <div class="idea-section-val">${idea.entry_condition||'—'}</div>
+        </div>
+
+        <div class="idea-section">
+          <div class="idea-section-label">GEX RATIONALE</div>
+          <div class="idea-section-val">${idea.gex_rationale||'—'}</div>
+        </div>
+
+        <div class="idea-rationale">${idea.gex_rationale||''}</div>
+        <div style="grid-column:1/-1"><div class="tags-row">${tags}</div></div>
+      </div>
+    </div>`;
+  });
+
+  html += `<div class="disclaimer">⚠ These are AI-generated trade ideas based on GEX data only. They do not constitute financial advice. Always verify with your own analysis. Options trading involves substantial risk of loss.</div>`;
+  container.innerHTML = html;
+}
+
+
+// ─── DTE BUCKET CONSTANTS ─────────────────────────────────────────────────────
+const BUCKETS = [
+  { key:'0_1',  label:'0–1 DTE',  color:'#ff3d57', desc:'Intraday / pin risk — expires soon' },
+  { key:'2_7',  label:'2–7 DTE',  color:'#ffab00', desc:'Weekly walls — dominant near-term' },
+  { key:'8_45', label:'8–45 DTE', color:'#00e676', desc:'Structural / monthly OI anchors' },
+];
+let _activeBucket = '2_7';  // default to weekly
+
+function switchBucket(key) {
+  _activeBucket = key;
+  // Update tab styles
+  BUCKETS.forEach(b => {
+    const el = document.getElementById(`bkt-tab-${b.key}`);
+    if (!el) return;
+    if (b.key === key) {
+      el.style.color = b.color;
+      el.style.borderBottomColor = b.color;
+    } else {
+      el.style.color = 'var(--muted)';
+      el.style.borderBottomColor = 'transparent';
+    }
+  });
+  if (_data[_ticker]) renderOneBucket(_data[_ticker], key);
+}
+
+function renderBuckets(data) {
+  const container = document.getElementById('bucket-charts');
+  if (!data?.gex_bucketed) {
+    container.innerHTML = '<div class="empty" style="height:200px">Restart server — gex_bucketed not in response</div>';
+    return;
+  }
+  const gb = data.gex_bucketed;
+
+  // Net summary in info bar
+  const nets = BUCKETS.map(b => {
+    const v = Object.values(gb[b.key]||{}).reduce((a,v)=>a+parseFloat(v),0);
+    return `${b.label}: ${v>=0?'+':''}${v.toFixed(3)}B`;
+  });
+  document.getElementById('bkt-info').textContent = nets.join('   ·   ');
+
+  // Build bucket tab bar + single chart area
+  container.innerHTML = `
+    <div style="display:flex;align-items:stretch;border-bottom:1px solid var(--line);flex-shrink:0;">
+      ${BUCKETS.map(b => {
+        const net = Object.values(gb[b.key]||{}).reduce((a,v)=>a+parseFloat(v),0);
+        const nc  = net>=0?'var(--green)':'var(--red)';
+        const isActive = b.key === _activeBucket;
+        return `<div id="bkt-tab-${b.key}" onclick="switchBucket('${b.key}')"
+          style="padding:8px 18px;cursor:pointer;border-bottom:2px solid ${isActive?b.color:'transparent'};
+                 color:${isActive?b.color:'var(--muted)'};transition:all .15s;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.5px;">${b.label}</div>
+          <div style="font-size:9px;color:${nc};margin-top:1px;">${net>=0?'+':''}${net.toFixed(3)}B</div>
+          <div style="font-size:8px;color:var(--muted);margin-top:1px;">${b.desc}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div id="bkt-single-chart" style="flex:1;min-height:0;"></div>`;
+
+  renderOneBucket(data, _activeBucket);
+}
+
+function renderOneBucket(data, key) {
+  const el  = document.getElementById('bkt-single-chart');
+  if (!el) return;
+  const gb  = data.gex_bucketed || {};
+  const lbb = data.levels_by_bucket || {};
+  const spot = data.spot;
+  const pct  = parseFloat(document.getElementById('win-sel').value);
+  const b    = BUCKETS.find(x => x.key === key);
+  const bmap = gb[key] || {};
+  const lvl  = lbb[key] || {};
+
+  if (!Object.keys(bmap).length) {
+    el.innerHTML = `<div class="empty" style="height:300px">No contracts in ${b.label} bucket</div>`;
+    return;
+  }
+
+  const strikes = Object.keys(bmap).map(Number).sort((a,z) => a-z);
+  const vals    = strikes.map(s => parseFloat(bmap[String(s)] || bmap[s.toFixed(2)] || 0));
+
+  // Strike window filter
+  let fs = strikes, fv = vals;
+  if (spot && pct < 1) {
+    const lo=spot*(1-pct), hi=spot*(1+pct);
+    fs=[]; fv=[];
+    strikes.forEach((s,i) => { if(s>=lo&&s<=hi){fs.push(s);fv.push(vals[i]);} });
+  }
+  if (!fs.length) { el.innerHTML='<div class="empty">No strikes in window</div>'; return; }
+
+  const absMax = Math.max(...fv.map(Math.abs), 0.0001);
+  const colors = fv.map(v => v>=0 ? 'rgba(0,230,118,0.85)' : 'rgba(255,61,87,0.85)');
+
+  // Shapes
+  const shapes=[], annots=[];
+  if (spot) {
+    shapes.push({type:'line',x0:spot,x1:spot,y0:0,y1:1,xref:'x',yref:'paper',
+                 line:{color:'rgba(0,229,255,.9)',width:1.5,dash:'dash'}});
+    annots.push({x:spot,y:0.98,xref:'x',yref:'paper',text:`$${spot.toFixed(2)}`,
+                 showarrow:false,font:{color:'#00e5ff',size:9},
+                 bgcolor:'rgba(6,8,16,.9)',borderpad:2,yanchor:'top'});
+  }
+  const levelDefs=[
+    {k:'zero_gamma',c:'rgba(255,255,255,.85)',d:'dot', l:'ZGL'},
+    {k:'gamma_wall', c:b.color,               d:'dash',l:'WALL'},
+    {k:'call_wall',  c:'rgba(0,230,118,.8)',   d:'dot', l:'CALL'},
+    {k:'put_wall',   c:'rgba(255,61,87,.8)',   d:'dot', l:'PUT'},
+  ];
+  levelDefs.forEach(({k,c,d,l}) => {
+    const v=lvl[k]; if(!v||v<fs[0]||v>fs[fs.length-1]) return;
+    shapes.push({type:'line',x0:v,x1:v,y0:0,y1:1,xref:'x',yref:'paper',
+                 line:{color:c,width:1.2,dash:d}});
+    annots.push({x:v,y:0.97,xref:'x',yref:'paper',text:l,showarrow:false,
+                 font:{color:c,size:9},bgcolor:'rgba(6,8,16,.85)',borderpad:2,yanchor:'top'});
+  });
+
+  const chartH = Math.max(200, window.innerHeight - 44 - 38 - 32 - 28 - 60 - 12);
+
+  Plotly.react(el,
+    [{type:'bar', x:fs, y:fv, marker:{color:colors},
+      hovertemplate:'<b>$%{x}</b><br>GEX: %{y:.5f}B<extra></extra>'}],
+    { ...PB,
+      xaxis:{gridcolor:'#1c2a45',tickfont:{size:10},zeroline:false,
+             range:pct<1?[spot*(1-pct),spot*(1+pct)]:undefined},
+      yaxis:{gridcolor:'#1c2a45',zeroline:true,zerolinecolor:'rgba(255,255,255,.15)',
+             zerolinewidth:1.5,range:[-absMax*1.3,absMax*1.3],tickfont:{size:10},
+             title:{text:'Net GEX ($B)',font:{size:9,color:'#4a6080'}}},
+      height: chartH,
+      margin:{l:62,r:12,t:8,b:44}, bargap:0.1, shapes, annotations:annots },
+    {responsive:true, displayModeBar:false}
+  );
+}
+
+
+// ─── RESEARCH VIEW ────────────────────────────────────────────────────────────
+let _rschData = null;
+
+async function loadResearch() {
+  const t    = _ticker;
+  const days = document.getElementById('rsch-days').value;
+  document.getElementById('rsch-info').textContent = 'Loading…';
+  try {
+    const [lvlHist, alertHist] = await Promise.all([
+      api(`/api/levels-history/${t}?days=${days}`),
+      api(`/api/alerts/history?ticker=${t}&days=${days}&limit=100`),
+    ]);
+    _rschData = { lvlHist, alertHist, ticker: t, days };
+    document.getElementById('rsch-info').textContent =
+      `${lvlHist.records} level snapshots · ${alertHist.count} alerts · ${t} last ${days}d`;
+    renderResearchCharts(_rschData);
+  } catch(e) {
+    document.getElementById('rsch-info').textContent = 'Error: ' + e.message;
+  }
+}
+
+function renderResearchCharts(d) {
+  if (!d) return;
+  const { lvlHist, alertHist } = d;
+  const rows = lvlHist?.history || [];
+
+  if (!rows.length) {
+    document.getElementById('rsch-levels-chart').innerHTML =
+      '<div class="empty">No history yet — levels persist after each bootstrap</div>';
+    return;
+  }
+
+  const ts  = rows.map(r=>r.ts);
+  const spot= rows.map(r=>r.spot);
+  const zg  = rows.map(r=>r.zero_gamma);
+  const gw  = rows.map(r=>r.gamma_wall);
+  const cw  = rows.map(r=>r.call_wall);
+  const pw  = rows.map(r=>r.put_wall);
+
+  // ── Chart 1: Price + all key levels over time ─────────────────────────────
+  const traceLine = (name,y,color,dash='solid',width=1.5) => ({
+    type:'scatter', x:ts, y, mode:'lines', name,
+    line:{color,width,dash},
+    hovertemplate:`${name}: $%{y:.2f}<extra></extra>`,
+  });
+
+  Plotly.react('rsch-levels-chart', [
+    traceLine('Spot',    spot, '#00e5ff', 'solid', 2),
+    traceLine('ZGL',     zg,   'rgba(255,255,255,.7)', 'dot'),
+    traceLine('GammaWall',gw,  '#ffab00', 'dash'),
+    traceLine('CallWall',cw,   '#00e676', 'dot'),
+    traceLine('PutWall', pw,   '#ff3d57', 'dot'),
+  ], {
+    ...PB,
+    xaxis:{type:'date',tickformat:'%b %d %H:%M',gridcolor:'#1c2a45',tickfont:{size:8}},
+    yaxis:{gridcolor:'#1c2a45',tickfont:{size:9},title:{text:'Price ($)',font:{size:8,color:'#4a6080'}}},
+    margin:{l:58,r:10,t:6,b:44},
+    legend:{bgcolor:'rgba(6,8,16,.7)',bordercolor:'#1c2a45',font:{size:9},orientation:'h',y:-0.2},
+    hovermode:'x unified',
+  }, {responsive:true,displayModeBar:false});
+
+  // ── Chart 2: Net GEX regime over time ─────────────────────────────────────
+  const netGex = rows.map(r=>r.net_gex_b||0);
+  Plotly.react('rsch-regime-chart', [{
+    type:'scatter', x:ts, y:netGex, mode:'lines',
+    fill:'tozeroy',
+    fillcolor: netGex[netGex.length-1]>=0?'rgba(0,230,118,0.12)':'rgba(255,61,87,0.12)',
+    line:{color:netGex[netGex.length-1]>=0?'#00e676':'#ff3d57',width:1.5},
+    hovertemplate:'Net GEX: %{y:.4f}B<extra></extra>',
+  }], {
+    ...PB,
+    xaxis:{type:'date',tickformat:'%H:%M',gridcolor:'#1c2a45',tickfont:{size:8},matches:'x'},
+    yaxis:{gridcolor:'#1c2a45',tickfont:{size:8},zeroline:true,
+           zerolinecolor:'rgba(255,255,255,.2)',title:{text:'Net GEX $B',font:{size:8,color:'#4a6080'}}},
+    margin:{l:58,r:10,t:4,b:30},
+    shapes:[{type:'line',y0:0,y1:0,x0:0,x1:1,xref:'paper',yref:'y',
+             line:{color:'rgba(255,255,255,.2)',width:1}}],
+  }, {responsive:true,displayModeBar:false});
+
+  // ── Chart 3: Bucketed net GEX over time ───────────────────────────────────
+  const b01  = rows.map(r=>r.net_0_1||0);
+  const b27  = rows.map(r=>r.net_2_7||0);
+  const b845 = rows.map(r=>r.net_8_45||0);
+  Plotly.react('rsch-bucket-chart', [
+    {type:'scatter',x:ts,y:b01, mode:'lines',name:'0-1d',line:{color:'#ff3d57',width:1.5},hovertemplate:'0-1d: %{y:.4f}B<extra></extra>'},
+    {type:'scatter',x:ts,y:b27, mode:'lines',name:'2-7d',line:{color:'#ffab00',width:1.5},hovertemplate:'2-7d: %{y:.4f}B<extra></extra>'},
+    {type:'scatter',x:ts,y:b845,mode:'lines',name:'8-45d',line:{color:'#00e676',width:1.5},hovertemplate:'8-45d: %{y:.4f}B<extra></extra>'},
+  ], {
+    ...PB,
+    xaxis:{type:'date',tickformat:'%H:%M',gridcolor:'#1c2a45',tickfont:{size:8}},
+    yaxis:{gridcolor:'#1c2a45',tickfont:{size:8},zeroline:true,zerolinecolor:'rgba(255,255,255,.15)',
+           title:{text:'Bucketed GEX $B',font:{size:8,color:'#4a6080'}}},
+    margin:{l:58,r:10,t:4,b:30},
+    legend:{bgcolor:'rgba(6,8,16,.7)',bordercolor:'#1c2a45',font:{size:9},
+            orientation:'h',x:0,y:1.15},
+  }, {responsive:true,displayModeBar:false});
+
+  // ── Alert log ─────────────────────────────────────────────────────────────
+  const logEl = document.getElementById('rsch-alert-log');
+  const alts  = alertHist?.alerts || [];
+  if (!alts.length) {
+    logEl.innerHTML = '<div style="font-size:9px;color:var(--muted)">No alerts in this period</div>';
+    return;
+  }
+  logEl.innerHTML = alts.slice(0,50).map(a=>{
+    const sev=a.severity||'INFO';
+    const sc =sev==='CRITICAL'?'var(--red)':sev==='WARNING'?'var(--amber)':'var(--cyan)';
+    return `<div class="rsch-alert ${sev}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span style="font-size:8px;font-weight:700;color:${sc}">${sev}</span>
+        <span style="font-size:9px;font-weight:700">${a.ticker||''}</span>
+        <span style="font-size:8px;color:var(--muted);margin-left:auto">${new Date(a.time).toLocaleString()}</span>
+      </div>
+      <div style="color:var(--white);line-height:1.4">${a.msg}</div>
+      <div style="color:var(--muted);margin-top:2px">spot $${a.spot}</div>
+    </div>`;
+  }).join('');
+}
+
+</script>
+</body>
+</html>
